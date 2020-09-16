@@ -2447,6 +2447,8 @@ Then comes whether they have public-facing or internal.
 
 SERVERLESS AND APPLICATION SERVICES
 ===================================
+Serverless doesn't mean there are no servers. It means there are no servers provisioning to take place manually by us.
+No admin overhead. It will scale , provision, terminate based on load, request and call.
 
 Event driven architecture:
 
@@ -2468,6 +2470,16 @@ AWS Lambda
 the execution of time of the function.
 4. Functions are written in a language and they uses a run time(python 3.6, java)
 5. Functions runs in a runtime environment.
+6. Lambda functions always runs in a clean runtime environment with allocates resources such as cpu.
+No matter whatever be the number of functions invoked in parallel, all runs as clean separate environment.
+7. Lambda has no persistent storage.
+8. Lambda functions runs in a container and assumes an execution role.
+9. The execution role has the privilege to connect to AWS services to put data into Lambda
+and redirect output from lambda to AWS products.
+10. Lambda is event-driven or aws service,api-gateway or manual invocation.
+11. Lambda function max execution limit is 15minutes.
+12. 1M free request per month and 400 000 GB-seconds of computer per month.
+
 
 CloudWatch Events and EventBridge
 =================================
@@ -2500,4 +2512,46 @@ API's are small piece of code running or hosted in a server.
 To Interact with API we require endpoints. They are basically entrypoints to an API. 
 API also provides an API Interface which consist of all data points. All services are interacted via an API. 
 So API for a large scale system must be highly available and scalable. 
+
+1. API Gateway is an AWS managed API endpoint Service.
+2. Create , publish, monitor and secure API's as a Service.
+3. API's are billed based on number of API calls, data transfer and additional performance features
+such as caching.
+4. They can be used directly for serverless architecture.
+
+API Gateway is a core product for building serverless application in AWS.
+API gateway can be used directly with some aws services to pull data without using compute service.
+They can be used with all types of architecture as an evolution from monolithic to Microservice to
+Serverless.
+
+Serverless Architecture
+=======================
+
+1. We manage servers if at exist very few but less admin overhead.
+2. Applications are a collection of small & specialised functions.
+3. Stateless and ephemeral environments- duration billing.
+4. event-driven so consumption only when being used.
+5. for computation mostly FaaS and managed services are used wherever possible.
+
+Simple Notification Service(SNS)
+================================
+1. SNS is a public AWS service which has connectivity to public endpoint.
+2. Coordinates the sending and delivery of messages.
+3. The messages are <=256 kb payloads. 
+4. SNS Topics are the base entity of SNS where permissions and configuration are done.
+5. It is based on pub/sub model where publisher sends a message to topic
+and subscriber who has subscribed to the topic receives it.
+6. The subscriber end point can be HTTP, SQS, email,push message, lambda etc.
+7. SNS is a widely used default notification services inside AWS.
+8. It is also widely known for FAN-OUT pattern where events or messages
+are dropped to topic as single payload entity then multiple SQS queues are the subscriber 
+who consume the messages in topics and process them individually.
+9. We can also filter message from SQS topic to lambda functions.
+10. They can also send delivery status for few endpoints like http,SQS ,lambda.
+11.They can retry deliveries for reliable delivery.
+12. They are region resilient so HA and scalable.
+13. Also supports SSE for encrypting data message on disk.
+14. We can have cross-account  via topic policy. 
+
+
 
