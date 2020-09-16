@@ -1,4 +1,4 @@
-# AWS-Solution-Architect-Associate-SAA-C02-
+# AWS-Solution-Architect-Associate-SAA-C02
 Learning Notes on AWS
 
 1. S3 and IAM are GLobal and not region scoped.
