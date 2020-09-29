@@ -2154,6 +2154,37 @@ When migrating the snapshot to a new DB. USE ARN of snapshot if migration is fro
 when we migrate snapshot a new DB engine or db instance we lost the media files as media files are stored locally in ec2instance.
 Thats where EFS comes into rescue.
 
+
+Aurora Serverless
+=================
+
+1. We dont have to provision database instances in advance like provisioned Aurora.
+2. It uses concept of ACU: Aurora capacity units. it is scalable and massive removal of admin overhead.
+3. Since it is serverless the cluster has min and max ACU. Cluster scales based on load.
+4. We only pay for resources consumed per second billing.
+5. Same cluster shared storage 6 copies 3 AZ replication.
+
+Architecture
+============
+Provisioned servers are replaced via ACU. we scale based on ACU we are allocated.
+ACU are allocated from a pool of ACU managed by AWS.
+Now based on load we are allocated ACU within a range of defined min and max acu for a cluster.If the load is high
+then more ACU are allocated but max upto the defined max range and once the max acu instance is activated
+rest all small acus are discarded and we pay for consumption per second billing + cluster shared storage.
+
+On top of ACU we have the wrapper known as proxy fleet. This is between the client+Application and ACU.
+Client or application dont interact with ACU directly. They communicate with proxy fleet and these fleet scales based on demand
+and shrink and interact with ACU.
+
+Use case:
+Infrequently used applications : Less user base so lower min acu and lower max acu. Less cost for ACU allocation.
+Unpredictable workloads: You dont know the time of day or week where the load spikes
+so to learn more of it we can have lowest min ACU and higher max ACU. No only when load
+happens we can study it and take decision on correct acu.
+variable workloads : few minutes within a hour of times a day is good as we pay for those minutes ACU only.
+New applications and dev and test db's
+
+
 Aurora Global database:
 =======================
 
@@ -2552,6 +2583,978 @@ who consume the messages in topics and process them individually.
 12. They are region resilient so HA and scalable.
 13. Also supports SSE for encrypting data message on disk.
 14. We can have cross-account  via topic policy. 
+
+Step functions (State machine :the base entity)
+==============================================
+
+1. Step functions lets you create state machines. The state machines consist 
+of start and End but in between many states which can be time based, directional/choice based
+which lets you create long running serverless workflow based applications with AWS integrating
+with many AWS services.
+
+2. They aim to overcome limitations or design decisions of lambda functions. The maximum
+execution limit time is 15min for lambda so any applications which require longer processing
+is not permitted by lambda. 
+
+3. However one way to achieve using lambda is to chain many lambda functions together but that would lead
+to a messy applications at scale. Also they are stateless and cant commit or store any state of processing.
+In a order processing system we need to store state of order during workflow execution.
+
+4. Lambda is a FaaS so it is good for single isolated functions which executes a certain objective
+and they are stateless as each invocation creates an isolated environment with new compute resources.
+
+5. Step functions has state machines. These state machines lets you create serverless workflow.
+Each state machine has a START and END and in between are states. States are the things that occur.
+START---->state---->END.
+
+6. Maximum duration for state machine execution with step functions is 1 year.
+
+7. There are two types of workflow available in step functions:
+
+a. Standard workflow - max duration 1 year for long running workflow.
+b. Express workflow - Transaction, processing guarantees,event based. Runs for 5 minutes
+
+8. State machines can be invoked via API Gateway,lambda, EventBridge, IOT rules.
+9. We can export our state machine configuration knows as ASL ( AMAZON STATES LANGUAGLE). It is a
+a json based template.
+
+10. Like all AWS services we need IAM role permissions to interface with other aws products and services.
+
+11. Different type of States:
+a. SUCCEED & FAIL
+b. WAIT  - Pause a processing of workflow for certain duration or specific point in time.
+c. CHOICE - To take a choice in workflow based on certain imports/input
+d. PARALLEL - To execute parallel operations tasks for a choice we made.
+e. MAP - Imagine having a list [] of orders having 10 order. Now since we have 10 order we have to execute
+10 times the processing.
+f. TASK - Represent single unit of work. It actually does thing and integrates with lots of
+different services like GLUE, BATCH, SQS, SNS ,EMR etc.
+
+So State machines has several states of a workflow and a task which  coordinates with other external
+services which does the actual work.
+
+
+Simple Queue Service (SQS)
+==========================
+
+1. Public ,Fully managed , Highly available queues.
+2. Queue are of two types : Standard Queue or FIFO queue.
+3. In Fifo queue ordering is preserved whereas standard queue no ordering guarantee.
+4. Messages in queue can be upto 256kb in size.
+5. Received messages are hidden till a visibility time-out. Once the time-out
+is expired they reappear again for processing. So they should be explicitly deleted once processed.
+6. SQS has the concept of Dead-Letter queues for problem messages.
+Any message which is unable to be processed and keep coming can be configured to push to dead letter queue.
+Different workload can be designed to deal with DLQ.
+7.  SQS can scale based on queue length: ASG and lambda func.
+8. Standard queue: At-least once delivery but can be duplicates with different ordering.
+FIFO Queue: exactly once , no duplicates.
+9. Standard queue scales so fast as they dont have any limitations on delivery and ordering.
+whereas fifo queue scales to 3000 messages per second with batching else 300 without.
+10. SQS is billed based on request. Request means number of time you request to poll messages
+from queue. Polling can be Short(immediate) polling and long (waitTimeSec) polling.
+10. Short polling is not cost effective as there are changes of 0 messages and you keep polling
+and getting billed for the request whereas long polling polls when when there are messages and wait
+for certain duration . They poll 1-10 messages upto 64kb total.
+11. Message can be encryption at rest using KMS or transit.
+12. Just like bucket policy, topic policy we have queue policy for giving permission to other accounts
+to use SQS.
+13. 14 days retention of messages.
+
+SQS Fan Out pattern. 1 SNS Topic and multiple SQS queue subscribing to the topic
+for independent scaling and processing.
+
+
+Kinesis [ Ingestion of data at scala, large throughput]
+=======
+
+1. Kinesis is a managed scalable streaming service.
+2. Producer pushes or ingest data to streams and the streams can scale to near or infinite data rates.
+3. We can have multiple producer and multiple consumers ingesting and reading reading from streams.
+4. Once the kinesis ingest data to streams , it can retain for 24 hrs only. Within 24 hrs the consumers
+can read data do analytics or processing. Post 24hrs it is replaced by new data.
+5. Public service and highly available by design.
+
+6. Kinesis stream scales based on Shards. We can have 1 shard, 2 shard to N shard.
+And for each shard we can have ingestion at 1MB/S and consumption at 2MB/S.
+7. As we have 24hr moving data window for streams, we can increase the window to 7 days with additional
+cost.
+8. Each kinesis streams has shards and each shards and kinesis data record(1MB)
+9. Kinesis firehose is the product which is used to streaming/ingesting data 
+from Kinesis streams to other AWS products like S3. May be you want to store
+the data for long term so S3 storage can be used while using firehose for transfer.
+
+Producer send data -> Stream consist of Shards(1..N number)-> Kinesis ingest data into shards-> Each shards persist
+data within it as kinesis data record(1MB)-> Then from the stream consumer reads data.
+
+SQS vs Kinesis [Point of Difference]
+==============
+Kinesis: 
+1.Huge scale Ingestion of data, large throughput. Rolling time window as multiple consumers can consume at real time or within
+window.
+2.Retention of data /persistence: 24hrs/7 days.
+3.Designed for data ingestion, analytics, Monitoring, App Clicks.
+
+SQS: 
+1.Worker pools, decoupling, Asynchronous communication.
+2.SQS usually contains 1 producer group, 1 consumer group . 
+It is designed for asynchronous communication where the producer or consumer doesn't bother about the functional state of each other.
+3.SQS has no persistence of message, message are polled and deleted. Gone forever , no time window or retention of 24hrs /7 day concept.
+
+CloudFront
+==========
+1. CloudFront is a global object cache(CDN)
+2. Content are cached in locations close to customers.
+3. Low latency and higher throughput. Less load on the content server.
+4. Can handle both static and dynamic content.
+5. Can integrate with ACM (AWS Certificate Manager) to provide HTTPS website as static hosting in s3.
+6. Caching only works download and not in upload. Upload is always origin direct connection.
+
+Terms:
+1. Distribution: It is the configuration unit of cloudfront.
+2. Origin: The source location of your content.
+3. Edge locations: The local infrastructure which holds the cache of your data.
+4. Regional edge cache: Large version of edge locations. Provides another layer of cache.
+
+Flow:
+1. User uploads an Image to s3 bucket and configure distribution for edge locations.
+2. Cloudfront URL is generated.
+3. The URL is accessed by other users in the world to request for the image.
+4. CFN first checks the local edge locations of the users for the image. If the image is found then it is 
+returned to the requestor immediately with super performance benefit in speed.
+In case the image is not found, it next check the regional cache . 
+5. If the image is not found in region cache , it does an origin fetch and catch data both in Region cache and edge locations
+and returns the image to requestor.
+6. Next time new requestor requesting for image if belong to same locations then returned from edge locations. Else
+checks the region cache and returns the image. No origin fetch occurs.
+
+Caching optimisation:
+1. Caching optimisation can be done to improve speed and performance of request.
+2. If simple content is requested without use of any query string parameters then it is fast
+and full original content as is cached.
+3. If we specify query string parameters with the request then the content is fetched based on certain URL pattern condition and cached.
+Not more performance benefit as all user wont worry with exact query pattern. 
+4. Also querying for a distinct id etc wont help in caching as every time new ID are requested and edge locations will run out of memory.
+So things to be kept in mind while caching and planning for distributions.
+
+We have the option of caching all query string parameters or certain pattern. Also forward to origin yes or no.
+
+AWS Certificate Manager[ ACM ]
+==============================
+
+1. HTTP websites are simple and insecure.
+2. HTTP/S : HTTP websites are made more secure by adding a layer of security in form of SSL and TLS certificate.
+3. ACM is used to create , renew and deploy certificate.
+4  The certificate are signed by a trusted authority and hosted in server.
+5. Browser trust the trusted authority and as certificate are signed by trusted authority it trusts the certificate too.
+6. HTTPS enabled secured encrypted data in transit and certificate proves identity.
+7. It supports only few services (Cloudfront, API Gateway,ALB and not ec2) . Means website running on ec2 machines server can't be
+assigned a trusted certificate by ACM.
+
+FLOW:
+1. ACM created certificate and deploy into CFN distribution and origin and supported services.
+2. Any client request to edge locations using HTTPS + DNS name on the certificate.
+The certificate is checked at end-point server and matched with DNS name. No self signed certificate is allowed.
+It has to be signed by trusted identity to reach origin for fetch.
+
+
+AWS Region that You Request a Certificate In (for AWS Certificate Manager)
+
+If you want to require HTTPS between viewers and CloudFront, you must change the AWS Region to US East (N. Virginia) in the AWS Certificate Manager console before you request or import a certificate.
+If you want to require HTTPS between CloudFront and your origin, and you're using an ELB load balancer as your origin, you can request or import a certificate in any Region.
+
+Origin Access Identity (OAI)
+============================
+This is feature to secure our S3 bucket from direct access by user bypassing CloudFront knows as OAI.
+1. OAI is a virtual identity. It is created and associated with cloudfront distribution.
+2. The distribution is a combination of DNS name + associated edge locations . So, the OAI is installed and configured at the 
+edge locations also.
+3. Now we configure the bucket policy of s3 bucket to explicit allow only access for the OAI coming from edge locations.
+Rest all is implicit Deny.
+4. Now any user requesting to access the s3 bucket resource will be allowed only if it is coming via edge locations with OAI.
+Rest all direct access is blocked via implicit deny.
+
+Note: If the CloudFront is made private then it's restrictions wont apply and user will be able to direct access the s3 bucket
+ARN/DNS directly unless OAI is configured. So OAI configuration is a must even if CFN is configured to be private.
+
+
+Lambda@Edge
+===========
+
+1.Lambda@Edge allows cloudfront to run lambda function at CloudFront edge locations to modify 
+traffic between the viewer and edge location and edge locations and origins.
+2. Runs is AWS public space.
+3. Different Limits vs normal lambda functions.
+
+4 parts : Viewer request -> Origin request -> Origin response -> Viewer response.
+Viewer request: After CloudFront receives the request from viewer.
+Origin request : Before CloudFront forward the request to origin.
+Origin response: After CloudFront receives origin response.
+Viewer response : Before CloudFront forwards the response to viewer.
+
+Use case:
+========
+a/b testing
+Migrating between s3 origin
+Content by country
+different objects based on device.
+
+AWS Global Accelerator
+======================
+Global accelerator edge network.
+
+AWS Global Accelerator is designed to improve global network performance by offering entry point onto the global AWS transit network as 
+close to customers as possible using ANycast IP addresses
+
+1. AWS Global Accelerator uses the concept of Global accelerator edge network across AWS REGIONS.
+2. Customer when tries to reach a AWS Infra they had to go through public network with lot of performance and network issues
+due to distance and hops. So performance is not good as distance increases.
+3. Normally we have a unicast IP address assign to a single network device and no two device can share the same IP.
+But in Global accelerator product we share two anyCast IP between multiple locations. So when user tries to reach AWS infra
+they are routed to closes edge locations.
+4. In Global accelerator product we created accelerator and assign two AnyCast IP address (1.2.3.4 & 4.3.2.1) to AWS global edge locations.
+These locations are present widely in AWS regions globally. When customer tries to reach either of this IP they are redirected
+to nearest edge locations over a public internet. 
+4. Once they reach the edge locations they enter the AWS global network zone. From here on AWS uses the global private
+backbone network to transmit user request to the AWS infrastructure with significantly high performance. These private global backbone are
+fiber network. 
+
+CloudFront vs Global Accelerator product
+========================================
+1. Global Accelerator product is a network product and can only server layer 4 request (TCP, UDP). It cannot understand HTTP/S 
+protocol.
+2. CloudFront is used for caching content across edge locations.
+3. GA is the entry point to AWS global backbone. It's objective is to move AWS network close to customers where as cloudfront objective
+is to move content closer to customers.
+4. Any requirement for caching, endpoint edge caching choose CloudFront. If requirement is for TCP/UDP,
+AWS global private backbone network, routing close to global edge locations using AnyCast IP then choose AWS global accelerator.
+
+
+VPC Flow Logs
+=============
+1. VPC flow logs only capture "Packet Metadata" and not "Packet contents".
+2. They can be applied to VPC level : all interface in that VPC.
+3. Can be applied Subnet level : All interfaces in that subnet.
+4. Can be applied to instance/interface directly.
+5. Flow logs are not real-time. We can't rely on them for real time traffic or monitoring.
+6. We can dump flow logs to S3 Bucket or CloudWatch logs for analytics.
+
+Parts of the flow logs are :
+<srcaddr>
+<dstaddr>
+<srcport>
+<dstport>
+<protocol>
+<action>
+If the action is OK means accepted it is often security group as they are stateful , if traffic is allowed IN
+then they are allowed out i.e outbound.
+Whereas if you see two lines of VPC flow logs accept and reject action then perhaps NACL is present at subnet level
+which is stateless ie. it evaluates both inbound and outbound traffic. Such logs are of two lines.
+ICMP=1,TCP=6,UDP=17 [Protocols]
+
+Note: it only captures traffic metadata details about sender and receiver
+but never capture what the contents of packet. Also Not real-time.
+
+Egress-Only Internet Gateway [ Only for IPV6 Address]
+=====================================================
+1. All IPV4 IP address are classified to public and private IP's.
+2. In a VPC private IP address are not accessible to public internet or AWS public space. To make an private IP
+publicly routable we use NAT gateways in VPC level and configure route to redirect all ipv4 traffic coming
+from internal AWS to nat gateway.
+In this method All Outbound connections are allowed + Inbound Response are allowed But Inbound Connections from
+public Internet are not allowed blocked.
+
+3. In IPV6 version 6 IP address inside AWS , ALL IPV6 IP Addresses are publicly accessible. There is no
+concept of public or private IP's. It allows both Outbound Connections+InBound Response as well as
+InBound Connections + Outbound response. 
+To put a restriction to the InBound Connection request and trying to make architecture similar to IPV4 we have
+egress-only Internet Gateway. It don't allow any incoming connection request from public internet /aws public space
+to internal VPC.
+Setup - ::/0 added to Router with destination as eigw-id.
+
+4. Egress-Only-Gateway are HA across all AZ in the region and scales when required.
+
+
+VPC Endpoints(Gateway) [ S3 and dynamo db access only . Same region access only no cross region]
+======================================================
+
+1. Provide private access to S3 and DynamoDB.
+Private access means they allow a private only resource inside a VPC or any resource inside a private only VPC
+to S3 and DynamoDB.
+2. S3 and DynamoDB are public space means they are not associated or present inside a VPC. They require a public version 4 address to be accessed by a resource.
+Any resource or service which is hosted inside a VPC or private network or lacks ipv4 public address is private by nature.
+To make it public infrastructure we have to give access to private resource via a nat gateway present at public subnet.
+The nat gateway assign the public ipv4 address and route to VPC router then internet gateway to public space/public AWS service.
+Or we can assign IPV6 address to the private resource as in AWS IPV6 is publicly routable.
+
+3.For implementing Gateway endpoints we have to create endpoints for a service in a region and associate it to a VPC.
+For example s3 in us-east-1. We have to attach the gateway endpoint to a subnet inside VPC.
+4. Prefix list is added to the route table of the VPC where the endpoint is attached.
+Prefix list uses the gateway endpoint as target.
+Prefix list is a list of IP address for the service and added to route table . It is the destination and 
+target is endpoint.
+for example any traffic destined for s3 goes via gateway endpoint rather than the Internet gateway.
+
+A rule with destination pl-63a5400a (com.amazonaws.us-east-1.s3) and a target with this endpoints' ID (e.g. vpce-12345678) will be added to the route tables you select below.
+Subnets associated with selected route tables will be able to access this endpoint.
+
+
+5. Endpoint gateway is region and VPC level. it does not goes to subnet or AZ. While setup we have to
+choose subnet to be associated. AWS does the routing. It is Region so highly available across all AZ in a region by default.
+Region resilient.
+
+6. Endpoint policy : We can configure endpoint policy in gateway to restrict the usage of all parts of Resource
+and restrict to certain areas/service/prefix only. For example all outbound request via the endpoint
+can access only certain bucket only not all bucket present in s3 for a region.
+
+7. Prevent leaky buckets: S3 bucket are private by default. However we can configure the bucket policy
+to allow access only via the gateway endpoint and restricting all other access. S3 bucket are having implicit deny as default.
+
+8. Remember gateway endpoint are logical objects and limitations are they are only accessible from the VPC only
+on which they are associated.
+
+9. 
+Use case : Private VPC == Public access to a public resource(S3 bucket only,dynamodb)
+Confident VPC and doesn't want to give public internet access in anyways so we would just set up
+gateway endpoint at VPC level to allow access to only s3 and dynamo db.
+
+10 . Flow:
+Gateway endpoint attached to VPC ->Prefix list attached to route table of the subnet-> traffic
+from private resource goes to router -> Endpoint -> S3/DynamoDb.
+No NatGateway or Internet gateway is required.
+
+
+VPC Endpoints(Interface) [ Anything except S3 and dynamo db access , PrivateLink]
+=================================================================================
+1. Provide private access to AWS services.
+2. They provide access to anything except S3 and dynamoDB which are provided by Gateway endpoint.
+3. Interface endpoints are attached to subnet level. 1subnet = 1AZ . So they are AZ resilience.
+Not highly available. You have to associate as much interface endpoint to each subnet for availability.
+4. Network access are controlled by security groups and they support TCP and IPV4 only.
+5. Endpoint policy can be configured just like gateway endpoint.
+6. They use privateLink to inject external third party services inside VPC.
+7. In Interface endpoint we have a endpoint specific DNS name which we want to resolve to access that service
+for example SNS: vpce-*****sns.us-east-1.vpce.amazonaws.com
+There is other DNS name which is private DNS - 	sns.us-east-1.vpce.amazonaws.com
+If you want to resolve the private DNS(default service DNS) to the interface endpoint IP then we have to
+associate it in route53 private hosted zone.
+8.All private or public instance in VPC when tries to reach the private DNS for the service it will resolve to the 
+interface endpoint IP address then network flow directly to the Service/resource.
+
+VPC Peering
+===========
+1. Direct encrypted network link between two VPC's.
+2. Uses AWS Global network backbone when using cross-region peering connections. Communication is encrypted.
+3. No transitive connection. Peering is always between two VpC.
+VPC A - VPC B , VPC B- VPC C. It doesn't mean A and C have connections. To establish connections we have to make
+3 VPC peering connections A-B , B-C , A-C. 
+4. SG and NACL can be used to filter connections
+5. Route table configuration is required at both end of VPC peering connections
+to allow traffic from a-b and b-a. 
+6. VPC peering can be same account ,cross account , same region, cross-region.
+7. No overlapping CIDR. Address range must be different. 
+
+
+AWS Site-to-Site VPN [ Speed limitations 1.25Gbps]
+====================
+
+1. AWS site to site vpn is the quickest way to establish VPN connection between VPC(Virtual private cloud)
+and On-premises network or another cloud network.
+2. It is a logical connection between VPC and on-premises network encrypted using IPSec, running over the
+public internet. Remember it is not a physical network connection.
+There is an exception where we can establish site-to-site VPN over direct-connect network and not over public
+internet.
+3. Components of a VPN network:
+a. Virtual Private Gateway(VGW)
+b. Customer Gateway(CGW)
+c. VPN Configuration
+
+Virtual Private Gateway is the logical entity on the AWS side and is the target for the router. It is associated
+in the public space of AWS and connected to public Internet.
+Customer Gateway is the logical entity on the AWS side which maps or represent the physical device router on the customer On-premises side.
+VPN configuration involves setup and configuration link establishment between VGW and CGW. 
+
+4. Site-to-Site VPN are Highly available provided configuration and architecture and done correctly
+to support this.
+5. Quick to provision in a hour unlike direct connect or other network where it takes months and weeks
+for physical connection to setup.
+
+Architecture and flow:
+
+1. Partial HA with common point of failure as CGW:
+
+										 Endpoint1--------------------\
+											|						   \
+VPC Side with subnet -> Router -> VGW ---VPN Connection			Customer gateway(CGW) [ On-premises]
+								[AWS SIDE]			|				   /			
+										 Endpoint2---------------------
+										
+2.Highly available design with multiple CGW and multiple VPN connection in AWS side.
+									
+											
+										 Endpoint1(AZ A)-----------------------------------------------
+											|													|	
+											|--Endpoint1(AZ B)----|			   						|
+VPC Side with subnet -> Router -> VGW ---VPN Connection	 Customer gateway(CGW 1 in Building1) Customer gateway(CGW2 in Building2) [ On-premises]
+								[AWS SIDE]			|				|	  |								|
+											|--Endpoint2(AZ B)----									|
+											|				   									|
+										 Endpoint2(AZ A)-----------------------------------------------
+										
+a. VGW is created in AWS side and associated with a VPC Connection.
+b. Each VGW has two physical endpoints in different AZ with IPv4 public addressing.
+c. VPN connection is established between two endpoints and other connection between Endpoints and CGW.
+d. VPN set up can be static and dynamic. If we are using static then IP static config has to be updated
+in both side of router to set the destination of flow from VPC to On-premise via VGW 
+or On-premises to VpC via VGW.
+e. As the VPN tunnels are established between endpoint and CGW if HA set up is present
+then failure of one tunnel wont affect the data movement and connectivity as other tunnel is active.
+f. Static VPN: Route for remote side are added route tables as static routes.
+Networks for remote side are configured on the VPN connection.
+Doesn't support load balancing and multi connection failover
+g. Dynamic VPN: Uses BGP(Borded gateway protocol) between VGW and CGW.
+Route propagation if enabled then route table at AWS Side can learn about VPN network connected
+to VGW and dynamically added routes. To enable dynamic vpn , CGW must be supporting BGP.
+
+6. VPN have speed limitations of 1.25 GBPS also total cap on VGW for all
+connections made is 1.25 gbps.
+7. Latency is more as more hops due to public internet transit.
+8. Hourly cost, gb out cost, datacap(on-premisis)
+9. Benefit is Fast setup.
+10.Direct connect (DX) is fast so Site-to-Site VPN can be used as a secondary backup to DX
+Also they can used along with DX.
+
+AWS Direct Connect(DX)
+=====================
+
+1. AWS Direct connect assigns you a port in one of the DX location.
+2. The port is capable of delivering speeds of 1 GBPS(1000-base-lx) or 10GBPS(10GBASE-LR) to the customer router
+present in Dx location which requires (VLANS/BGP) protocol.
+3. Once the port is set up in DX location , infrastructure physical dedicated
+fibre cable has to be setup to extend that connection to the business premises.
+4. It can take months weeks for physical cable setup. Also the cross connect setup
+from DX port to the customer router has to be done by a human and can take days.
+5.Once the DX is setup we can setup multiple VIF(virtual interfaces) over one DX network.
+The VIF can be public or private.
+In public VIF it allows customer/on-premisis to access aws public service only via
+DX and there is no encryption in dx data transit by default.
+In private VIF it allows to connect to a single VPC and no encryption.
+6. To enable IPSEC encryption we can set up a public VIF and make that VIF as site-to-site VPN
+so encryption can be enabled from the virtual gateway endpoints and customer side via setting up
+site-to-site vpn upon VIF on DX network.
+7. DX is faster so 40GBPS speed for 4 ports in aggregate.No encryption.
+
+
+
+AWS Transit Gateway(TGW)
+========================
+
+1. Transit gateway is a highly scalable , routing networking device used to connect various vpc's 
+and on-premisis VPN network.
+2. We need route table configuration to add routes.
+3. In Transit gateway it is a hub and all VPN can be connected to the gateway without establishing separate peering connections.
+4. It is highly available and scalable network object which significantly reduces latency.
+5. we can create a complex architecture of VPC + Site-to-Site VPN + Direct Connect.
+6. It supports multiple route tables allowing complex routing architecture.
+7. It can peer with same account, cross-account ,same region and different region connections and leverage aws global network features.
+share transit gateway with other account.
+8. Can integrate with DX using transit VIF.
+
+1. Create a transit Gateway
+2. Create transit gateway attachments for each vpc in each subnet of the region.
+3. Once both attachments are up, transit gateway route tables must show both
+as associations and in Routes both VPC CIDR will be there.
+4. Go to each subnet of the VPC add the route subnet for the VPC to talk to with destination as transit Gateway.
+Association route table ID tgw-rtb-0b3c53ea0ab08fbd5
+Propagation route table ID tgw-rtb-0b3c53ea0ab08fbd5
+Do the same for reverse vpc also means A subnet add B route and B subnet add A route.
+10.16.0.0/16 tgw-0d1cb59e1205e6735	 active  No
+
+Public service means they are hosted in AWS public space and not within a VPC.
+They have public endpoint and anyone can interact with the service provided the resource policy
+and Permission policy grants them. For example S3,SNS is a public service but resources are private
+by default due to implicit deny.
+
+Private services are the ones which require a VPC to be hosted upon. They can be connected only via a VPC which
+may be default VPC or customer managed VPC. They are present in AWS private space.
+
+
+Storage Gateway [ File gateway, volume gateway[cached,stored], Tape[VTL] gateway]
+=================================================================================
+1. Storage gateway are hybrid virtual appliance may be present in On-premises or aws.
+2. Provides extension of file and volume storage in AWS.
+3. Volume storage backups into AWS.
+4. Tape backups into AWS and migration of existing Infrastructure into AWS.
+5. Basically they provide extension of the storage when your local infrastructure storage is limited so you store
+the cached data only in locally and primary copy in AWS.
+Store the primary copy in local storage but take asynchronous backups to aws as ebs snapshots.
+Large tape library archive storage or backup is s3 glacier.
+
+It is of 3 types:
+1. Tape Gateway(VTL): virtual tapes in s3 and glacier
+2. File gateway: File storage backed by s3 objects. It uses NFS and SMB protocol
+3. Volume gateway : Stored/cached mode using iSCSI . Block storage backed by s3 and EBS snapshots.
+
+File-Gateway: Storage gateway hosted in On-premises having file server running. Connected to it 
+are systems and servers using NFS and SMB protocol. File gateway transfers all the storage
+via a HTTPS protocol endpoint to s3. The objects are stored in s3 and lifecycle policies can be attached to them
+for transition to IA , OneZone-IA. Also it can have Active directory integration for authorisation to file-server in
+gateway.
+
+Suitable for decommissioning on-premises files and moving to s3.
+
+Tape-Gateway[iSCSI]: 
+Storage gateway is hosted on-premises and facing a backup server. The backup server
+was initially connected to tapedrives.Now the gateway behaves to have media-changer and tape-drive using iSCSI.
+Transmits all data over https-endpoint to S3 and then to glacier. Active tapes are stored in S3 and Archive
+tapes are moved to Glacier. Each tape locally 1PB. Virtual tape 100GIB - TiB.
+
+Suitable for infrastructure which had tape/magnetic tape as storage.
+
+Volume-Gateway[iSCSI]:
+
+a. Volume Gateway(Stored mode): The Gateway is present in on-premises with local storage and upload buffer.
+The primary copy is stored on-premise and network servers access the data from gateway using iSCSI.
+Now it transmits Asynchronous backups to AWS using HTTPS endpoints to a storage gateway which creates EBS snapshots.
+Later the snapshots can be used to create volumes for migration.
+
+b. Volume Gateway(Cached mode): In contract to above, local storage is replaced by cached storage.
+Data is not stored locally. Only frequently accessed data is stored in local on-premise. In AWS
+data is stored in S3 backed volumes and EBS snapshots.
+
+Snowball / edge/ Snowmobile
+============================
+1. Snowball
+
+Ordered from AWS , physical storage as device delivered.
+50 TB to 80TB capacity and on-premise must have 1 GBPS.
+Data encryption at rest using KMS.
+Multiple device to multiple premises.
+Economical range is 10TB to 10PB. Only storage no computation.
+
+2. Snowball Edge
+Both Storage and compute.
+Larger capacity then snowball . Fast network 10GBPS.
+3 types:
+Storage optimised(with ec2) - 1 TB SSD
+Compute optimised
+Computer optimised with GPU
+ideal for remote site where lambda computation or some processing is required while data is moving.
+
+3. Snowmobile:
+Portable datacenter truck.
+ideal for 10PB+ data. Not multi-site only single location.
+100PB per snowmobile.
+
+Directory
+=========
+
+
+The Directory service is a product which provides managed directory service instances within AWS
+Must be used within VPC. Supports windows environments.
+Can be used in isolation, Integrated with On-premise , Can proxy back request from on-premise.
+
+it functions in three modes
+
+Simple AD - An implementation of Samba 4 (compatibility with basics AD functions)
+AWS Managed Microsoft AD - An actual Microsoft AD DS Implementation
+AD Connector which proxies requests back to an on-premises directory.
+
+
+Simple AD[Simple , default, isolation]
+Isolated architecture uses open source Samba 4 mode.
+Here we deploy the Active directory inside VPC and services like amazon workspace integrates and
+provide login to virtual users.
+cannot integrate with on-premise AD like microsoft AD.
+
+AWS Managed Microsoft AD [ MS AD DomainService or trust AD DS, Integrated with On-premises]:
+Here we deploy the actual microsoft AD service inside the AWS. For establishing trust relationship with On-premises AD
+we can use private service like VPN,DX.
+Completely microsoft AD DS implementation. Resilient if vpn fails still aws services can use directory services as Actual AD is inside
+VPC aws.
+
+AD Connector[ Doesn't store any directory info in cloud, Just a proxy of on-premises]:
+Suppose you have just one aws service which require AD services. In this case you don't deploy AD directory inside AWS
+instead you just put a AD connector there which then proxies to the AD services deployed in On-premises via a private network.
+AWS service will see the connector present but doesnt care whether present in AWS ZONE or on-premises.
+Not resilient as if private network fails then service fails due to On-premise has the actual implementation.
+Required when just one service needs directory service and no need of deploying brand new AD service.
+
+AWS DataSync
+============
+
+1. It transfers the data TO and FROM AWS. Bi-directional transfer of data.
+2. Support validation of copied data by default.
+3. Use case : migration, datatransfers, dataprocessing,archival, DR/BC.
+4. Designed to work at huge scale.
+5.It has agent installed which supports 10GBPS per agent.
+6. supports encryption,compression,incremental and scheduled transfers.
+7. bandwidth throttlers or limiters, automatic recovery of transit errors.
+8. Integration of data transfers using endpoint to s3, efs,FSX windows.
+
+Flow.
+1. install datasync agent at On-premises which connects to NAS/SAN Storage using SMB,NFS protocol.
+2. The datasync agent runs in VMware and communicates to datasync endpoint in AWS side.
+3. The endpoint transmits data to S3, fx windows, efs.
+4. Can limit transfer limit, throttle and schedule data for transfer of data or avoid transfer at certain time periods.
+
+components:
+1.task (job)
+2.agent
+3.location.
+
+Amazon FSx for Windows[NTFS protocol]
+=====================================
+Amazon has the EFS shared file system for linux or ec2 machines which uses NFS protocol.
+For windows environment support Amazon has come up with a native shared file system server/share known as FSx for windows
+
+1. It is designed for Integration with windows environment and support Managed ActiveDirectory, self AD integration.
+2. It is available within a single AZ or multi-AZ within a VPC and provides on-demand or scheduled backups.
+3. It is accessible via VPC,VPN,Peering,DX.
+4. On-premises connect the file share over SMB protocol. The files are shared as <\\file_id.domain_name\<File_name>
+5. Encryption at Rest and transit. Supports Distributed file system(DFS) scale out, File level versioning so that we can restore
+old version of file, deduplication.
+6. VSS: user driven restores and managed product which had no admin overhead.
+
+Amazon FSx for Lustre [ High performance computing HPC for Linux cluster, POSIX]
+==========================================================================
+
+1. It is a managed lustre file system designed for HPC-Linux clients having POSIX
+2. Used for bigdata, ML, Financial modelling where high performance computing is required.
+3. 100GB throughput and sub-millisecond latency.
+4. Two types of deployment :
+a. Scratch : These are pure performance deployments. No HA, No Replication. If hardware fails then file-system and
+data lost.
+b. Persistent - long term storage, HA within a single AZ, self healing.
+5. Fsx for lustre is accessible within VPC. ENI is injected to VPC 
+and is accessible using VPN,DX.
+
+Architecture.
+1. FSx for lustre is backed by s3. All objects are stored in s3 and appear to be present in filesystem.
+It has the concept of lazy loading where data is made available in FS only when it is accessed. 
+Any modifications to file or archive can be pushed to S3 again using hsm_archive.
+2. Reading from and writing to disk based on throughput and IOPS. Also it can read from cache.
+3. Backup to s3 available both manual or automatic (0-35 days retention)
+
+AWS Secrets Manager [ Secret rotation, Product Integration]
+===========================================================
+
+1. It shares functionality with parameter store.
+2. It is designed solely for storing secrets [ password, API keys].
+3. usable via SDK(integration), console,CLI,API
+4. Supports automatic rotation of keys via AWS lambda provided lambda has a execution role.
+5. Integrates with AWS products (RDS) for automatic syncup of secrets when updated in secrets manager.
+Lambda having execution role can rotate the key in secrets manager and same updated key of the database instance
+can be updated in RDS seamlessly by secrets manager without admin overhead.
+6. Secrets are stored in KMS at rest.
+
+Parameter store are useful for storing hierarchical structure storage of keys but cannot rotate keys.
+Secrets manager can rotate keys as well as update in all integrated services as managed product.
+
+AWS Shield [ protects against DDOS attacks, Layer 3 and 4, Route53,EC2,ELB,CloudFront and global accelerator]
+==========
+1. Provides AWS resources with DDoS protection. Protects against layer3 and layer4 DDOS attacks.
+2. it comes with two variants: Shield Standard and Shield Advanced.
+Shield standard comes free with route53 and cloudFront
+Shield advanced comes with a fee of $3000 p.m
+It provides additional protection from EC2,ELB,global accelerator along with Route53 and cloudFront.
+Also it has specialised DDoS response team and financial insurance for all increasing AWS cost due to attacks.
+
+AWS Web Application Firewall(WAF) [ WEBACL's are associated to ELB ,API Gateway and CloudFront]
+==============================================================================================
+1. Provides protection against Layer 7 (HTTP/S) firewall.
+2  Protection against layer 7 exploits: SQL injection, cross-site scripting, geo-block,rate awareness
+3. WAF Rules are defined and included in WEBACL's which is associated with a cloudFront distributed deployed at all edge locations
+to filter incoming traffic based on WAF rules.
+4. Integrates with API Gateway, ALB, CloudFront.
+
+CloudHSM [ FIPS 140-2 Level 3]
+==============================
+HSM standards for hardware security module.
+HSM can be CloudHSM hosted in Cloud or on-premises HSM Device.
+
+1. KMS is AWS managed and shared service between account but separated.
+2. CloudHSM is a True "Single tenant" Hardware security module (HSM)
+3. It follows a processing standard of Fully FIPS 140-2 Level 3 . KMS is L2 overall and some l3.
+4. It has industry standard API : PKCS#11, java cryptography extension(JCE), cryptoNG(CNG)
+5. Cloud HSM is AWS provisioned but managed by customer. AWS has no access to keys. Customer has the
+access to tempered proof device. If key lost too difficult to retrieve.
+6.KMS integrates with CloudHSM for custom key store service.
+
+Architecture flow of CloudHSM
+1. CloudHSM are only deployed in AWS Managed cloudHSM VPC and not in customer managed VPC.
+2. In AWS Managed VPC we install multiple cloud HSM device in two AZ in two separate subnets 
+and together make a cluster.
+3. Now both cloudHSM device can syncup policies,keys in sync when new nodes are added or removed.
+4. We have customer managed VPC when ec2 instances are provisioned in two AZ and two subnets.
+To inject and provide CloudHSM interface we install ENI's in them . So two ENI in two subnet.
+Then we have to install cloudHSM agent in instances to interact.
+5. CLoudHSM agent uses the industry standard API CryptoNG, PKCS, JCE to connect to HSM cluster in aws managed vpc.
+6. Note AWS has no access to secure area of HSM where keys are stored. It can only run update on the device
+bt no access to keys.
+
+Remember:
+1. CloudHSM no integration with AWS products eg No S3 SSE.
+2. Enable Trasparent data encryption (TDE) for oracle database.
+3. If you are using any certicate issuing authority CA then it can protect private keys.
+4. Also manage SSL/TLS encryption for web-servers.
+
+So Anything that required cloudHSM device , no integration with AWS services, industry standard API access,
+hardware module then CLouhSM is the choice for rest AWS KMS is the idea choice.
+
+Amazon DynamoDB
+===============
+
+1. DynamoDB is a wide column store NOSQL database.
+2. It is a public NOSQL database-as-a-service(DBaaS) product with key/value document structure.
+Fast and single digit latency.
+3. It is a managed service and no self-managed service or infrastructure is required.
+4. It has manual or automatic provisioned of performance for scaling IN and out or On-demand mode
+5. Point in time restore(PITR) and backups are available. Encryption in rest.
+6. Capacity means Speeds in dynamoDB which comes at two options RCU and WCU
+Read capacity Units(RCU) - 4KB per second
+Write capacity Units(WCU) - 1KB per second.
+7. Highly available and resilient across AZ.
+
+Architecture:
+A DynamoDB table consists of items. Each item can be 400KB in size include data+attribute name.
+A Primarykey is defined per table and a primary key can be only partition key
+or composite key i.e combination of primary key+sort key.
+No rigid schema. Capacity of RCU and WCU is set per table.
+
+On-Demand Backup: 
+1. Option of taking a full table copy of a table and restore it to same region or cross-region with index or without index.
+2. Also modify encryption settings.
+
+Point in time restore:
+1. All changes to the DynamoDB are captured in a series of backups with 1 sec granularity.
+We can replay the changes are revert the state of DB to that point within 35 day recovery window
+to a new DynamoDB table.
+
+Highlights:
+1.NOSQL, Key/value store, Billed on RCU/WCU, storage and features consumed.
+2.Can be accessed via CLI, API and Console.
+
+Reading and Writing:
+1. Query can only be performed on Partition key + Sort key or only partition key.
+2. Inefficient query and full table scan can lead to capacity and RCU consumption whereas the data intended
+or returned is less than the RCU consumed.
+3. On-demand capacity provisioning is done for unpredictable workloads,unknown,low admin work.
+But On-demand capacity can lead to 5 times price against provisioned one.
+4. Provisioned capacity can lead to set RCU and WCU per table basis.
+5. Every table has burst pool of 300 seconds. So we should rely on this pool
+and provision less capacity . If all pool is consumed then it can lead to throttle
+and provisioned capacity error.
+
+Read and Write Consistency:
+1. In DynamoDb Architecture we have storage nodes among them one is leader node.
+Assume we have 3 Storage Nodes in AZ A, AZ B and AZ C. The Storage node in AZ B is the leader node.
+
+Now Consistency in DynamoDB is two types:
+1. Eventual Consistency 
+2. Strong Consistency
+
+Suppose a user updates removes 4th column of an item, so the write is performed to the leader node.
+The leader node takes milliseconds to replicate to other storage nodes. In eventual consistency only 1/3 nodes are checked
+for data retrieval. If replication is finished between AZ B and AZ C but AZ A replication is not finished yet, then
+any reads from A will lead to stale data retrieval. This is 50% less cost than strong consistency.
+In Strong consistency reads are always from leader storage node. Data model to be chosen and query pattern 
+depends on the use case. Not only application supports stale data so strong consistency might be the option.
+In eventual consistency multiple records are returned for 1 RCU whereas in Strong consistency
+exact 1 record is returned.
+
+Calculation of WCU:
+Suppose 10 items to be written with each each 2.5KB then
+no of WCU needed ?
+1 WCU = 1 KB/S.
+So No of WCU = Round(size/1)3
+(2.5/1)=2.5 Round to 3 size.
+No of items =10 , So WCU = 3*10= 30 WCU
+
+Calculation of RCU:
+Suppose 10 items to be read with each each 2.5KB then
+no of RCU needed ?
+1 RCU = 4kb/s
+No of RCU = Round(size/4 kb)1
+(2.5/4)1= 0.6 Round to 1KB.
+For 10 items is 10 RCU (Strong consistency)
+For eventual consistency its 5 RCU i.e 50%
+
+DynamoDB Streams and Triggers
+=============================
+
+DynamoDB Streams:
+1. Streams are ordered list of items changes that occurred to a table.
+2. The streams are generated for a 24 hour rolling window.
+3. Steams are enabled per table basis. They capture the insert,update and deletes.
+4. To the view stream changes we have 4 types:
+a. Key only b. Old image c.New Image d. Old + New image.
+Key only has the items partition key only or some items partition key + sort key if it's part of composite primary key.
+Old Image : It is the old state of record. This view type is somewhere good and efficient as we can query to see the new state of record
+and compare the old image presented to us by view.
+New Image : This is the new state of record.
+old + new image : Both the new and old state are represented.
+
+Triggers:
+Triggers are implemented in oracle database but DynamoDB also implements such feature as NOSQL.
+1. Any changes in the item of table generates an event.
+2. These events are generated from the dynamoDB stream. Stream captures the 24 hour rolling window changes
+and any changes generates an event called triggers i.e an action.
+3. In AWS triggers are implemented using Streams + lambda i.e; AWS = STREAMS + LAMBDA
+4. Lambda function is invoked in response to a change in stream to perform some computation.
+The view data is sent as an event to the lambda function which in turn does something as an action.
+5. Use-case : Aggregation , Reporting and analytics.
+
+Dynamo DB Local and Global secondary index 
+==========================================
+Indexes are alternative access pattern. They are views built on top of base table which allows querying on columns which are
+prohibited on base table as those attributes are not part of primary key in base table. In Indexes we have the liberty of choosing
+our own attributes based on our business scenario access pattern and building our attributes for efficient reading of data.
+
+1. Index are alternative views on table data.
+2. DynamoDB allow two types of indexes : 
+a. Local Secondary index (LSI)
+b. Global Secondary Index(GSI)
+
+Local Secondary Index : 
+1.They allow to create a view on top of base table with a different sort key.
+2.It has to be created during creation of table.
+3.Local secondary index has the strong consistency as they are created same time as base table.
+4.Option to choose attribute for view creation : All, keys_only , Include
+5.Limitations to 5 LSI per table and they share the WCU and RCU with the table.
+6.Indexes are sparse i.e null value for a attribute are not considered and included in the view. So the read 
+on the LSI doesn't consume the WCU for the attribute for those items.
+
+Global Secondary Index:
+1. Limitations to 20 indexes per table.
+2. Present a different perspective of the base table.
+3. Allow to choose a different partition key + sort key.
+4. Can be created after the base table is created so it has eventual consistency. 
+5. DynamoDB suggest to use GSI as default. They have their own RCU and WCU.
+6. Attributes can be chosen for All, include_only, keys_only.
+7. GSI are sparse same as LSI. Null values omitted for index attributes.
+
+Considerations: Choose the index attributes wisely deciding on the access pattern, if the queries are executed
+for non-index attribute that can lead to expensive operation as fetched from base table and cost of RCU.
+
+DynamoDB Global Tables [ Multi Master cross-region replication]
+===============================================================
+1. They provide the multi master cross-region replication
+2. No master-slave or leader architecture. 
+3. There is one global table and all other tables are created in multiple region and added to global table configuration.
+These tables are replica tables to global tables.
+4. Last writer wins for conflict resolution and provides sub-millisecond latency for writes.
+5. The reads for strong consistency for same region and eventual consistency for cross-region.
+6. since all are master table so reads and writes can occur to any table.
+7. Use case: Best suited for large global application as DR/BC and HA is provided.
+
+DynamoDB Accelerator (DAX)
+==========================
+Traditional system : Application queries for a data, search in cache , if cache miss then separate SDK call to fetch data
+from the Dynamodb then update the cache for subsequent reads which will lead to cache hit.
+
+Using DAX : DynamoDB DAX provides ease of single API SDK call to dynamoDB without maintaining separate cache.
+It abstracts away the implementation and user feels like querying dynamoDB Database. DAX is tightly integrated with DynamoDB
+So whenever user queries DAX it checks it cache and if cache miss occurs it fetches from DynamoDB and updates it cache and returns to user
+in sub-milliseconds latency. No admin overhead.
+Less complexity for App Developer as the Application just need to install DAX SDK.
+
+Architecture
+============
+
+1. DAX is a VPC product. If you to set up DAX cluster inside a VPC with primary cluster in one AZ
+and replica cluster in other AZ's for high availability.
+2. Writes are done to primary and replicated to replicas. Replicas are for Reads.
+3. EC2 instance running an application + DAX SDK. DAX SDK maintain two caches: Query cache and item cache.
+Query cache has the complete query along with query/scan parameters.
+Item cache hold the batch(getItem)results specifically only the primary key i.e partition key and sort key.
+4. Any writethrough operations DAX SDK will connect to dynamoDB and perform write operations then cache it in DAX for efficient reads.
+5. It has eventual consistency and not suitable for strong consistency.
+6. Any failure of primary node will lead to election and selection of another primary node. They are highly available.
+7. It can scale up and out means bigger instances for DAX and addition of multiple instances for DAX.
+8. DAX is in-memory cache for fast efficient scaling and reads.
+
+Amazon Athena
+=============
+1. Athena is super-powerful serverless adhoc querying service.
+2. It lets you query data stores in S3 without modifying the source data.
+3. We have to define schema in advance and table in data catalog.
+It is called schema on read because whenever data is read from S3 it transforms or converts the data into the form defined in schema.
+Data is projected through schema. So the original table remains un-modified.
+4. Only pay for the data consumed for querying. 
+5. Supports many formats of data( csv, json,parquet,avro etc) and data can be structured, unstructured,semi-structured.
+Also supports ELB, Cloudtrail and VPC flow logs from AWS services.
+
+
+ElastiCache [ In memory cache database, Application Code change required, High performance, Redis & MemcacheD]
+=================
+
+1. ElastiCache is In-memory database for high-performance.
+2. Two types : MemcacheD and Redis.
+3. It provides cache of data for read-intensive workloads significantly reducting cost
+and workload on database.
+4. Can be used to store session data by making server stateless.
+5. Cache are managed and stored in external elasticache instead of applications instances
+so makes the application fault tolerant and user can continue their session and application access in the same way
+without losing session data.
+6. But to implement ElastiCache it requires application level code change.
+So the application must know how to use elastiCache, perform cache invalidation etc.
+Memcached vs Redis:
+
+MemcacheD   				|  Redis
+1. Simple DataStructures    1. Advanced DataStructures
+2. No Replication			2. Multi-AZ
+3. Multiple nodes(sharding) 3. Replication enabled so scale at reads
+4. No backup and restore	4. Backup and restore present
+5. Best for Multi-threaded 	5. Best for Transactions,ACID, Consistency.
+architecture.
+
+
+Amazon Redshift [ Petabyte Scale DataWarehouse, OLAP, Enhanced VPC routing]
+=====================================================
+
+1. Column based Petabyte Scale DataWarehouse designed for OLAP. It is cluster based.
+2. Database-as-a-Service similar structure to RDS.
+3. Suitable for analysis, aggregation of data.
+4. Two important features:
+a. Redshift spectrum : Query directly to S3
+b. Federated query: Integrated with other DB's,remote db's for performing query on other DB's.
+5. Supports integration with tools like Quiksight.
+6. JDBC/ODBC connections, sql like interface.
+7. Redshift enhanced VPC routing to be enabled for any network related demands.
+Redshift uses public internet to interact with external sources but with vpc routing it uses all VPC based routes
+to reach external sources.
+8. It is not serverless and not highly-available. It is tied to one AZ in a VPC.
+9. It has a leader node[Query input,planning & aggregation] . Client/Applications connect to 
+leader node first. Compute node[ performing queries of data]. 
+The compute node is further divided into slices of 2,4,16,32 which runs parallel to query execution. Each compute node slices
+has local storage.
+10. VPC security, IAM permission, KMS at rest, CW monitoring.
+11. Automatic backups to s3(8hours,5gb), manual backups managed by admin.
+
+Important regarding intergrations:
+1. S3 can load and unload data to leader node.
+2. Firehose can stream data into Redshift.
+3. DynamoDB can copy data.
+4. DMS can migrate database
+5. Snapshots from S3 backup can be copied to cross-region and new redshift cluster can spin up from the snapshots in other region.
+
+Redshift resilience and Recovery
+================================
+1. Redshift supports two types of backups:
+a. Automated backup : Every 8 hours 5 GB of data to S3 as snapshots.
+These snapshots are incremental so only CDC changes. 
+Has default retention of 1 day and can be configured to 35 days. 
+b. Manual backups : By admin , manual copy of data and creation of snapshots.
+
+As Redshift is tied to VPC and single AZ so incase entire AZ fails , entire region fails
+in those cases we can use s3 snapshots as the recovery. As S3 is highly available across region and replicated to 3+ region.
+So if one AZ fails we can spin up brand new redshift cluster in another working region. If entire region fails then we can
+setup cross region copy of snapshots and provision a new cluster.
+
+
+
+
 
 
 
