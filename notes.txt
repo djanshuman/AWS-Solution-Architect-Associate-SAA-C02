@@ -363,35 +363,6 @@ No of RCU = Round(size/4 kb)1
 For 10 items is 10 RCU (Strong consistency)
 For eventual consistency its 5 RCU i.e 50%
 
- Correct
- Wrong
- Skipped
-Attempt 1: Failed (72% required to pass)
-70% correct (46/65)
-1 hour 11 minutes
-September 28, 2020 9:00 PM
-Review questions
-Knowledge areas
-Design High-Performing Architectures (22 questions)
-
-86%
-14%
-Design Secure Applications and Architectures (15 questions)
-
-53%
-47%
-Design Cost-Optimized Architectures (9 questions)
-
-56%
-44%
-Design Resilient Architectures (19 questions)
-
-74%
-26%
-
-
-
-
 
 
 
