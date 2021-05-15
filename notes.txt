@@ -1,0 +1,399 @@
+1. S3 and IAM are GLobal and not region scoped.
+2. AMI are built for specific region. They are locked for your account/region.AMI takes space and live in S3AMI created from snapshot
+Difference between COPY AMI and launching instance from AMIOnly after provision to EBS/snapshot a shared account can copy AMI to different or same region. Else they need to launchan EC2 Instance from AMI then create their own AMI
+3. Placement group: Cluster (low latency hardware setup, single AZ,same rack), spread( 7 instance per AZ), partition (instance spreadamong different groups/racks with an AZ,can launch 100 EC2 per group)
+Cluster: great network 10gbps , High bandwith, high througput , low latency . Rack fails all fails. risk
+Spread: span across multiple AZ's, ec2 instances are on different physical hardware, 7 instance per az.reduced risk of failure. if one instance fails with an AZ other works. ( MULTIPLE AZ , each AZ contains max 7)
+Partition: Each AZ is divided into many partition/racks group. Each partition group has EC2 instances upto 100. There can be max 7 partition group per AZ. Failure is not shared across group. data should be properlydistributed across many groups to be highly available. (ONE AZ, EACH AZ can have 7 partition grouP and each group max 100ec2's)EC2 instances can get partition info as metadata. 
+
+
+
+Horizontal Scaling: Load Balancer and Auto scalingHigh availability: Load Balancer with multi AZ, Auto scaling with multi AZ
+
+ELB: --> redirect traffic to multiple ec2 instance or many target groups containing multiple ec2's associated with a health check.Enable stickinessSSL termination  for websites-- > when a client talks to elb , elb creates a new connection with ec2 this is calledconnection termination. So ec2 sees private ip of elb and not client.Client ip is present in header(x-forwarded-for), port in (x-forwarded-port), protocol in (x-forwarded-proto)
+
+separate public from private trafficexpose single point of DNS to application
+3 types of LB:1. Classic LB 2. Application LB 3. Network LBhealth Check : Based on health check it determines whether instance is healthy or not. Status 200 is ok.check is done on port and route(/health)
+LB is used for below balancing:
+1. balancing based on route in URL2. Balancing based on hostname in URL3. Multiple applications running on same machine4. Multiple hTTP applications running across machine (target groups)
+has port mapping feature--> any dynamic port to redirect same  instance to same machine ALB(layer 7) --> advanced and new support http/https / websocketSSL termination  for websites-- > when a client talks to elb , elb creates a new connection with ec2 this is calledconnection termination. So ec2 sees private ip of elb and not client.
+Network ELB(layer 4):--> old support tcp+rules Onlyhigh performance then ALBcan see client IP no x-forwarded-for
+4** errors are client side error and 5** errors are application induced error.
+Difference betwen ALB and NLB -> ALB is called and resolved by DNS but NLP is static IP or elastic ip per AZ
+
+AutoScaling==========
+ASG default termination policy : 
+1.find az having least number of instance2.Then to choose from instance having multiple launch config choose oldest one.
+EBS1. Locked to az2. Network drive and can be plugged in to any instance to have persist data.3. Provisioned capacity in gbs and IOPS.
+4 types ebs volumes:1. GP2 (SSD)-> general purpose SSD volume balances price and performance.2. IOI (SSD)-> High in performance for critical application having low latency or high throughput.3. STI (HDD)-> low cost HDD for frequently accessed throughput intensive workloads4. SCI (HDD)-> low cost HDD for less frequently accessed.
+GP2 and IOI are boot volumeswe can mount and unmount drives on ec2 instance./etc/fstab for mounting whenever we launch an ec2.
+IOI -> ratio of IOPS to volume size is 50:1 GP2 having 16000 IOPS beyond that till 64000 IOPS we can use IOI.
+Snapshot lifecycle manager-> automate backups for creating snapshots from EBS volumeSnapshots are incremental backups for changed volumecan launch new volumes, create image , copy snapshot to other region
+EBS  migration-> create snapshots from ebs volume.Create volume from snapshots in different region.
+EBS encryption-> 1.create a snapshot from uncrypted one.2. Create a volume from new snapshot and choose encrypt volumne3. Now the volume is created with encryption,
+
+Instance store are ephemeral store. 
+Cloud characteristic:
+One demand Self-Servicebroad network accessResource poolingRapid	 elasticityMeasure usage
+
+Infrastructure Stack			application							data RuntimecontainerOSVirtualizationserversInfrastructureFacilities
+IAASapplicationdata RuntimecontainerOS --------------> Your unit of consumptionVirtualizationserversInfrastructureFacilities
+PAASapplicationdata Runtime	 --------------> Your unit of consumptioncontainerOSVirtualizationserversInfrastructureFacilities
+
+SAASapplication --------------> Your unit of consumptiondata Runtime	 containerOSVirtualizationserversInfrastructureFacilities
+There are FAAS, DAAS etc.
+
+
+172.31.0.0/16  --> Default VPC CIDR range
+First 4 and last 1 IP are reserved by AWS. So no of IP is always 5 less.
+/20-> 4091 IP/16- > 65531 IP/17 -> 32763 IP
+2**N => 32-16=16 -> 2^16= 65536 IP2**N => 32-17=15 -> 2^15= 32768 IPWhich means two /17 CIDR can fit into one /16 CIDR range
+
+In default VPC No of subnet=No of AZ in a regionDefault VPC are configured to have public IP version 4 address (IPV4) public address to instances. IGW, SG, NACL , Route table comes configured.
+EC2 instance composed of CPU, MEMORY , DISK and networking.
+connecting ec2
+===============
+AMI - Type RDP TCP protocol port 3389 Linux AMI type SSH TCP protocol port 22Remote desktop Conn --3389 windowsSSH --22 Linux
+IAM Access key: Each access key has two parts : Access_key_id + Secret_access_keyAccess_key_id is public and aws has access to it whereas secret_access_key is private part.
+
+Keypair: Every keypair has two parts public key & private key. private key is what we downloadand use it while connecting. Public key is accessible by AWS and it places in EC2 instances.When we ssh it authenticate our private key with public key and connection is established.
+.ppm -> linux or any macos.ppk -> only for putty
+EC2 is Iaas cloud model.Instance status check and system status check both should pass for ec2.2/2 is healthyInstance status check - OS is healthy and can accept trafficSystem status check - HOST, hardware is reachable and packets are delivered so traffic can bereachable.
+
+S3: Infinitely scalable storage system.Object has key and value. Key is name of object and value =content being stored.The size of value can be 0-5TB. every object has metadata,version ID, access control , subresources.
+Buckets:
+
+DNS
+===
+
+DNS (domain naming system) is a directory.
+
+1.Client sends a request for a domain name (www.amazon.com)
+2.The request goes to the DNS resolver which is sitting in your router or Internet service provider.
+3.The resolver queries on your behalf to the FIND THE NAMESERVER(DNS NAME SERVER) WHICH CONTAINS THE
+ZONE FILE IN THE ZONE. DNS IS distributed global resilent database (DNS) to search for the
+zone file IN THE ZONE which contains the DNS record.
+4. The zone FILE has the DNS record which is hosted by Name space server which we call as NS lookup.
+5. Once the resolver finds the zone file it sends the IP address mapped to the domain name.
+6. DNS CLient receives the ack'd request with IP address to query to and finally redirected to the
+domain name server www.amazon.com
+
+DNS CLIENT -> DNS RESOLVER -> DNS (DB) -> ZONE (REGION OR PART LIVE INSIDE DNS) -> ZONEFILE(PHYSICAL DB OF THE ZONE)-> NAMESERVER(WHERE ZONEFILES ARE HOSTED)
+
+
+
+CLIENT
+	\
+DNS RESOLVER \
+			 \
+			www-> 192.19.89.12    | -> NAMESPACE (NS)
+
+			ZONE FILE
+
+DNS Root is the starting point of any website IP search
+www.amazon.com.
+
+1. DNS CLIENT asks for the IP add of the domain name to dns resolver which is hosted in your router
+or ISP .
+THE ISP/router gives the root hints file which contains the DNS ROOT servers(13) address to search or lookup
+for the domain name.
+3. The DNS ROOT is a database hosted by DNS ROOT Servers(13) maintained by 12 global companies.
+4. The ROOT ZONE is managed by IANA.
+5. The root servers gives the dns record which is mapped to the domain name in dns root.
+6. DNS client gets back the address and proceeds to the URL.
+
+DNS is a system of trusts so at this point we only trust dns root zone.
+DNS CLIENT LOOK UP->ROOT ZONE IN A ROOT IANA 
+
+
+Aurora Serverless
+=================
+
+1. We dont have to provision database instances in advance like provisioned Aurora.
+2. It uses concept of ACU: Aurora capacity units. it is scalable and massive removal of admin overhead.
+3. Since it is serverless the cluster has min and max ACU. Cluster scales based on load.
+4. We only pay for resources consumed per second billing.
+5. Same cluster shared storage 6 copies 3 AZ replication.
+
+Architecture
+============
+Provisioned servers are replaced via ACU. we scale based on ACU we are allocated.
+ACU are allocated from a pool of ACU managed by AWS.
+Now based on load we are allocated ACU within a range of defined min and max acu for a cluster.If the load is high
+then more ACU are allocated but max upto the defined max range and once the max acu instance is activated
+rest all small acus are discarded and we pay for consumption per second billing + cluster shared storage.
+
+On top of ACU we have the wrapper known as proxy fleet. This is between the client+Application and ACU.
+Client or application dont interact with ACU directly. They communicate with proxy fleet and these fleet scales based on demand
+and shrink and interact with ACU.
+
+Use case:
+Infrequently used applications : Less user base so lower min acu and lower max acu. Less cost for ACU allocation.
+Unpredictable workloads: You dont know the time of day or week where the load spikes
+so to learn more of it we can have lowest min ACU and higher max ACU. No only when load
+happens we can study it and take decision on correct acu.
+variable workloads : few minutes within a hour of times a day is good as we pay for those minutes ACU only.
+New applications and dev and test db's
+
+Aurora Global database
+=====================
+
+5 region max
+
+
+VPC Flow Logs
+=============
+1. VPC flow logs only capture "Packet Metadata" and not "Packet contents".
+2. They can be applied to VPC level : all interface in that VPC.
+3. Can be applied Subnet level : All interfaces in that subnet.
+4. Can be applied to instance/interface directly.
+5. Flow logs are not real-time. We can't rely on them for real time traffic or monitoring.
+6. We can dump flow logs to S3 Bucket or CloudWatch logs for analytics.
+
+Parts of the flow logs are :
+<srcaddr>
+<dstaddr>
+<srcport>
+<dstport>
+<protocol>
+<action>
+If the action is OK means accepted it is often security group as they are stateful , if traffic is allowed IN
+then they are allowed out i.e outbound.
+Whereas if you see two lines of VPC flow logs accept and reject action then perhaps NACL is present at subnet level
+which is stateless ie. it evaluates both inbound and outbound traffic. Such logs are of two lines.
+ICMP=1,TCP=6,UDP=17 [Protocols]
+
+Note: it only captures traffic metadata details about sender and receiver
+but never capture what the contents of packet. Also Not real-time.
+
+Egress-Only Internet Gateway [ Only for IPV6 Address]
+=====================================================
+1. All IPV4 IP address are classified to public and private IP's.
+2. In a VPC private IP address are not accessible to public internet or AWS public space. To make an private IP
+publicly routable we use NAT gateways in VPC level and configure route to redirect all ipv4 traffic coming
+from internal AWS to nat gateway.
+In this method All Outbound connections are allowed + Inbound Response are allowed But Inbound Connections from
+public Internet are not allowed blocked.
+
+3. In IPV6 version 6 IP address inside AWS , ALL IPV6 IP Addresses are publicly accessible. There is no
+concept of public or private IP's. It allows both Outbound Connections+InBound Response as well as
+InBound Connections + Outbound response. 
+To put a restriction to the InBound Connection request and trying to make architecture similar to IPV4 we have
+egress-only Internet Gateway. It don't allow any incoming connection request from public internet /aws public space
+to internal VPC.
+Setup - ::/0 added to Router with destination as eigw-id.
+
+4. Egress-Only-Gateway are HA across all AZ in the region and scales when required.
+
+AWS Site-to-Site VPN [ Speed limitations 1.25Gbps]
+====================
+
+1. AWS site to site vpn is the quickest way to establish VPN connection between VPC(Virtual private cloud)
+and On-premises network or another cloud network.
+2. It is a logical connection between VPC and on-premises network encrypted using IPSec, running over the
+public internet. Remember it is not a physical network connection.
+There is an exception where we can establish site-to-site VPN over direct-connect network and not over public
+internet.
+3. Components of a VPN network:
+a. Virtual Private Gateway(VGW)
+b. Customer Gateway(CGW)
+c. VPN Configuration
+
+Virtual Private Gateway is the logical entity on the AWS side and is the target for the router. It is associated
+in the public space of AWS and connected to public Internet.
+Customer Gateway is the logical entity on the AWS side which maps or represent the physical device router on the customer On-premises side.
+VPN configuration involves setup and configuration link establishment between VGW and CGW. 
+
+4. Site-to-Site VPN are Highly available provided configuration and architecture and done correctly
+to support this.
+5. Quick to provision in a hour unlike direct connect or other network where it takes months and weeks
+for physical connection to setup.
+
+Architecture and flow:
+
+1. Partial HA with common point of failure as CGW:
+
+										 Endpoint1--------------------\
+											|						   \
+VPC Side with subnet -> Router -> VGW ---VPN Connection			Customer gateway(CGW) [ On-premises]
+								[AWS SIDE]			|				   /			
+										 Endpoint2---------------------
+										
+2.Highly available design with multiple CGW and multiple VPN connection in AWS side.
+									
+											
+										 Endpoint1(AZ A)-----------------------------------------------
+											|													|	
+											|--Endpoint1(AZ B)----|			   						|
+VPC Side with subnet -> Router -> VGW ---VPN Connection	 Customer gateway(CGW 1 in Building1) Customer gateway(CGW2 in Building2) [ On-premises]
+								[AWS SIDE]			|				|	  |								|
+											|--Endpoint2(AZ B)----									|
+											|				   									|
+										 Endpoint2(AZ A)-----------------------------------------------
+										
+a. VGW is created in AWS side and associated with a VPC Connection.
+b. Each VGW has two physical endpoints in different AZ with IPv4 public addressing.
+c. VPN connection is established between two endpoints and other connection between Endpoints and CGW.
+d. VPN set up can be static and dynamic. If we are using static then IP static config has to be updated
+in both side of router to set the destination of flow from VPC to On-premise via VGW 
+or On-premises to VpC via VGW.
+e. As the VPN tunnels are established between endpoint and CGW if HA set up is present
+then failure of one tunnel wont affect the data movement and connectivity as other tunnel is active.
+f. Static VPN: Route for remote side are added route tables as static routes.
+Networks for remote side are configured on the VPN connection.
+Doesn't support load balancing and multi connection failover
+g. Dynamic VPN: Uses BGP(Borded gateway protocol) between VGW and CGW.
+Route propagation if enabled then route table at AWS Side can learn about VPN network connected
+to VGW and dynamically added routes. To enable dynamic vpn , CGW must be supporting BGP.
+
+6. VPN have speed limitations of 1.25 GBPS also total cap on VGW for all
+connections made is 1.25 gbps.
+7. Latency is more as more hops due to public internet transit.
+8. Hourly cost, gb out cost, datacap(on-premisis)
+9. Benefit is Fast setup.
+10.Direct connect (DX) is fast so Site-to-Site VPN can be used as a secondary backup to DX
+Also they can used along with DX.
+
+AWS Direct Connect(DX)
+=====================
+
+1. AWS Direct connect assigns you a port in one of the DX location.
+2. The port is capable of delivering speeds of 1 GBPS(1000-base-lx) or 10GBPS(10GBASE-LR) to the customer router
+present in Dx location which requires (VLANS/BGP) protocol.
+3. Once the port is set up in DX location , infrastructure physical dedicated
+fibre cable has to be setup to extend that connection to the business premises.
+4. It can take months weeks for physical cable setup. Also the cross connect setup
+from DX port to the customer router has to be done by a human and can take days.
+5.Once the DX is setup we can setup multiple VIF(virtual interfaces) over one DX network.
+The VIF can be public or private.
+In public VIF it allows customer/on-premisis to access aws public service only via
+DX and there is no encryption in dx data transit by default.
+In private VIF it allows to connect to a single VPC and no encryption.
+6. To enable IPSEC encryption we can set up a public VIF and make that VIF as site-to-site VPN
+so encryption can be enabled from the virtual gateway endpoints and customer side via setting up
+site-to-site vpn upon VIF on DX network.
+7. DX is faster so 40GBPS speed for 4 ports in aggregate.No encryption.
+
+AWS Transit Gateway(TGW)
+========================
+
+Public service means they are hosted in AWS public space and not within a VPC.
+They have public endpoint and anyone can interact with the service provided the resource policy
+and Permission policy grants them. For example S3,SNS is a public service but resources are private
+by default due to implicit deny.
+
+Private services are the ones which require a VPC to be hosted upon. They can be connected only via a VPC which
+may be default VPC or customer managed VPC. They are present in AWS private space.
+
+Amazon DynamoDB
+===============
+
+1. DynamoDB is a wide column store NOSQL database.
+2. It is a public NOSQL database-as-a-service(DBaaS) product with key/value document structure.
+Fast and single digit latency.
+3. It is a managed service and no self-managed service or infrastructure is required.
+4. It has manual or automatic provisioned of performance for scaling IN and out or On-demand mode
+5. Point in time restore(PITR) and backups are available. Encryption in rest.
+6. Capacity means Speeds in dynamoDB which comes at two options RCU and WCU
+Read capacity Units(RCU) - 4KB per second
+Write capacity Units(WCU) - 1KB per second.
+7. Highly available and resilient across AZ.
+
+Architecture:
+A DynamoDB table consists of items. Each item can be 400KB in size include data+attribute name.
+A Primarykey is defined per table and a primary key can be only partition key
+or composite key i.e combination of primary key+sort key.
+No rigid schema. Capacity of RCU and WCU is set per table.
+
+On-Demand Backup: 
+1. Option of taking a full table copy of a table and restore it to same region or cross-region with index or without index.
+2. Also modify encryption settings.
+
+Point in time restore:
+1. All changes to the DynamoDB are captured in a series of backups with 1 sec granularity.
+We can replay the changes are revert the state of DB to that point within 35 day recovery window
+to a new DynamoDB table.
+
+Highlights:
+1.NOSQL, Key/value store, Billed on RCU/WCU, storage and features consumed.
+2.Can be accessed via CLI, API and Console.
+
+Reading and Writing:
+1. Query can only be performed on Partition key + Sort key or only partition key.
+2. Inefficient query and full table scan can lead to capacity and RCU consumption whereas the data intended
+or returned is less than the RCU consumed.
+3. On-demand capacity provisioning is done for unpredictable workloads,unknown,low admin work.
+But On-demand capacity can lead to 5 times price against provisioned one.
+4. Provisioned capacity can lead to set RCU and WCU per table basis.
+5. Every table has burst pool of 300 seconds. So we should rely on this pool
+and provision less capacity . If all pool is consumed then it can lead to throttle
+and provisioned capacity error.
+
+Read and Write Consistency:
+1. In DynamoDb Architecture we have storage nodes among them one is leader node.
+Assume we have 3 Storage Nodes in AZ A, AZ B and AZ C. The Storage node in AZ B is the leader node.
+
+Now Consistency in DynamoDB is two types:
+1. Eventual Consistency 
+2. Strong Consistency
+
+Suppose a user updates removes 4th column of an item, so the write is performed to the leader node.
+The leader node takes milliseconds to replicate to other storage nodes. In eventual consistency only 1/3 nodes are checked
+for data retrieval. If replication is finished between AZ B and AZ C but AZ A replication is not finished yet, then
+any reads from A will lead to stale data retrieval. This is 50% less cost than strong consistency.
+In Strong consistency reads are always from leader storage node. Data model to be chosen and query pattern 
+depends on the use case. Not only application supports stale data so strong consistency might be the option.
+In eventual consistency multiple records are returned for 1 RCU whereas in Strong consistency
+exact 1 record is returned.
+
+Calculation of WCU:
+Suppose 10 items to be written with each each 2.5KB then
+no of WCU needed ?
+1 WCU = 1 KB/S.
+So No of WCU = Round(size/1)3
+(2.5/1)=2.5 Round to 3 size.
+No of items =10 , So WCU = 3*10= 30 WCU
+
+Calculation of RCU:
+Suppose 10 items to be read with each each 2.5KB then
+no of RCU needed ?
+1 RCU = 4kb/s
+No of RCU = Round(size/4 kb)1
+(2.5/4)1= 0.6 Round to 1KB.
+For 10 items is 10 RCU (Strong consistency)
+For eventual consistency its 5 RCU i.e 50%
+
+ Correct
+ Wrong
+ Skipped
+Attempt 1: Failed (72% required to pass)
+70% correct (46/65)
+1 hour 11 minutes
+September 28, 2020 9:00 PM
+Review questions
+Knowledge areas
+Design High-Performing Architectures (22 questions)
+
+86%
+14%
+Design Secure Applications and Architectures (15 questions)
+
+53%
+47%
+Design Cost-Optimized Architectures (9 questions)
+
+56%
+44%
+Design Resilient Architectures (19 questions)
+
+74%
+26%
+
+
+
+
+
+
+
+
+
