@@ -26,7 +26,6 @@ EC2 instances can get partition info as metadata.
 
 
 
-
 Horizontal Scaling: Load Balancer and Auto scaling
 High availability: Load Balancer with multi AZ, Auto scaling with multi AZ
 
@@ -3551,9 +3550,6 @@ As Redshift is tied to VPC and single AZ so incase entire AZ fails , entire regi
 in those cases we can use s3 snapshots as the recovery. As S3 is highly available across region and replicated to 3+ region.
 So if one AZ fails we can spin up brand new redshift cluster in another working region. If entire region fails then we can
 setup cross region copy of snapshots and provision a new cluster.
-
-
-
 
 
 
